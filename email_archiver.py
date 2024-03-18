@@ -16,6 +16,10 @@ from email.utils import parsedate_to_datetime
 from dateutil import parser
 from dotenv import load_dotenv
 from jwt import InvalidTokenError
+from charset_normalizer import detect
+
+## EXPERIMENTAL increase poplib MAXLINE
+poplib._MAXLINE = 2048*1024
 
 # Load environment variables from .env file
 load_dotenv()
@@ -26,7 +30,7 @@ secret_key = os.environ.get('SECRET_KEY').encode()
 cipher_suite = Fernet(secret_key)
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def initialize_database():
     db_exists = os.path.exists('email_archive.db')
@@ -137,11 +141,19 @@ def fetch_and_archive_emails(conn, account_id, protocol, server, port, username,
             
             # Parse the email content
             email_message = email.message_from_bytes(raw_email)
+            logging.debug(f"We think the encoding is {email_message.get_charsets()}.")
             
             # Extract email metadata
             subject_parts = email.header.decode_header(email_message['Subject'])
             decoded_subject_parts = []
             for part, encoding in subject_parts:
+                ## UGLYHACK check if encoding is 'unknown-8bit'; if so try charset_normalizer
+                if encoding == 'unknown-8bit':
+                    logging.debug(f'Encoding unknown, trying charset_normalizer.detect()')
+                    encoding = detect(part)['encoding']
+
+
+                logging.debug(f"Processing subject part: {part} as {encoding}.")
                 if isinstance(part, bytes):
                     decoded_subject_parts.append(part.decode(encoding or 'utf-8'))
                 else:

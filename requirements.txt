@@ -3,3 +3,4 @@ cryptography
 python-dateutil
 python-dotenv
 PyJWT
+charset_normalizer
